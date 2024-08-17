@@ -1,0 +1,6 @@
+# Ignore everything (because of images)
+*
+
+# Don't ignore necessary files
+!.gitignore
+!.py
