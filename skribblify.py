@@ -1,11 +1,23 @@
+# ==================
 # Skribblify
+# ------------------
+# Author: Remarci225
+# ==================
 
+
+# Imports
+# =======
+from argparse import ArgumentParser
+from pathlib import Path
 from os import listdir
 from PIL import Image
-from math import sqrt, cbrt
+from math import cbrt
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import cpu_count
 
+
+# Constants
+# =========
 SUPPORTED_FORMATS = ["png", "jpg", "jpeg"]
 
 COLORS = [
@@ -36,6 +48,8 @@ COLORS = [
     ((160, 82, 45), (43.796139581025685, 29.324941748803845, 35.63667996216117)),
     ((99, 48, 13), (26.14434788696905, 20.426380558580703, 31.121640342598912))]
 
+LAB_VALUES = {}
+
 ONE_THIRD = 1 / 3
 DELTA = 6 / 29
 INVERSE_DELTA = 29 / 6
@@ -45,6 +59,19 @@ FOUR_TWENTYNINTH = 4 / 29
 XN = 95.0489
 YN = 100
 ZN = 108.8840
+
+
+# Functions
+# =========
+def get_full_path(path):
+    relative_markers = ['.', '/', '\\']
+    stripped_path = path
+    for relative_marker in relative_markers:
+        stripped_path = stripped_path.lstrip(relative_marker)
+        
+    current_path = Path().cwd()
+    new_path = current_path if path == "" else Path(current_path, stripped_path) if path[0] in relative_markers else path
+    return new_path if Path(new_path).exists() else current_path
 
 def f(t):
     return cbrt(t) if t > CUBED_DELTA else ONE_THIRD * (INVERSE_DELTA ** 2) * t + FOUR_TWENTYNINTH
@@ -69,42 +96,75 @@ def rgb_to_lab(rgb):
     return (L, a, b)
 
 def get_difference(values, new_values):
-    if values in calculated_lab_values:
-        lab_values = calculated_lab_values[values]
+    if values in LAB_VALUES:
+        lab_values = LAB_VALUES[values]
     else:
         lab_values = rgb_to_lab(values)
-        calculated_lab_values[values] = lab_values
-    return (lab_values[0] - new_values[0]) ** 2 + (lab_values[1] - new_values[1]) ** 2 + (lab_values[2] - new_values[2]) ** 2
+        LAB_VALUES[values] = lab_values
+    return (
+        lab_values[0] - new_values[0]) ** 2 + (lab_values[1] - new_values[1]) ** 2 + (lab_values[2] - new_values[2]) ** 2
     
-def change_pixel(x):
-    for y in range(height):
-        pixel = pixels[x, y]
-        min_index = 0
-        min_difference = get_difference(pixel, COLORS[min_index][1])
+def change_pixel(x_start, x_count):
+    for x in range(x_start, x_start + x_count):
+        for y in range(height):
+            pixel = pixels[x, y]
+            min_index = 0
+            min_difference = get_difference(pixel, COLORS[min_index][1])
 
-        for k in range(1, len(COLORS)):
-            difference = get_difference(pixel, COLORS[k][1])
-            if difference < min_difference:
-                min_index = k
-                min_difference = difference
+            for k in range(1, len(COLORS)):
+                difference = get_difference(pixel, COLORS[k][1])
+                if difference < min_difference:
+                    min_index = k
+                    min_difference = difference
 
-        pixels[x, y] = COLORS[min_index][0]
+            pixels[x, y] = COLORS[min_index][0]
 
-files = listdir()
+
+# Operations
+# ==========
+parser = ArgumentParser(
+    prog="Skribblify",
+    description="Convert images to the skribbl.io color palette"
+)
+
+parser.add_argument("-i", type=str, action="store", dest="input", default="", required=False,
+                    help="input path for images, current directory by default")
+parser.add_argument("-o", type=str, action="store", dest="output", default="", required=False,
+                    help="output path for images, current directory by default")
+parser.add_argument("-p", type=str, action="store", dest="prefix", default="converted ", required=False,
+                    help="prefix for the generated image filenames, \"converted \" by default")
+arguments = parser.parse_args()
+
+input_path = get_full_path(arguments.input)
+output_path = get_full_path(arguments.output)
+prefix = arguments.prefix
+
+
+files = listdir(input_path)
 image_files = [file for file in files if file.split('.')[-1] in SUPPORTED_FORMATS and file[:9] != "converted"]
 
-calculated_lab_values = {}
+print("Starting skribblifying...")
 
 for image_file in image_files:
+    print(f"Skribblifying {image_file}...")
+    
     image = Image.open(image_file)
+    pixels = image.load()
     width, height = image.size
     
-    threadPoolExecutor = ThreadPoolExecutor(cpu_count() * 2)
+    thread_count = cpu_count() * 2
+    threadPoolExecutor = ThreadPoolExecutor(thread_count)
     
-    pixels = image.load()
-    for i in range(width):
-        threadPoolExecutor.submit(change_pixel, i)
+    x_count = int(width / thread_count)
+    last_x_count = x_count + width - thread_count * x_count
+
+    
+    for x in range(thread_count - 1):
+        threadPoolExecutor.submit(change_pixel, x * x_count, x_count)
+    threadPoolExecutor.submit(change_pixel, width - last_x_count, last_x_count)
     
     threadPoolExecutor.shutdown()
     
-    image.save(f"converted {image_file}")
+    image.save(f"{Path(output_path, f'{prefix}{image_file}')}")
+
+print("Skribblifying Done! :D")
