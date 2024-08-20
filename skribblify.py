@@ -96,28 +96,31 @@ def rgb_to_lab(rgb):
     return (L, a, b)
 
 def get_difference(values, new_values):
-    if values in LAB_VALUES:
-        lab_values = LAB_VALUES[values]
-    else:
-        lab_values = rgb_to_lab(values)
-        LAB_VALUES[values] = lab_values
-    return (
-        lab_values[0] - new_values[0]) ** 2 + (lab_values[1] - new_values[1]) ** 2 + (lab_values[2] - new_values[2]) ** 2
+    deltaL = values[0] - new_values[0]
+    deltaA = values[1] - new_values[1]
+    deltaB = values[2] - new_values[2]
     
-def change_pixel(x_start, x_count):
-    for x in range(x_start, x_start + x_count):
-        for y in range(height):
-            pixel = pixels[x, y]
-            min_index = 0
-            min_difference = get_difference(pixel, COLORS[min_index][1])
+    return deltaL * deltaL + deltaA * deltaA + deltaB * deltaB
 
-            for k in range(1, len(COLORS)):
-                difference = get_difference(pixel, COLORS[k][1])
-                if difference < min_difference:
-                    min_index = k
-                    min_difference = difference
+def change_pixel(start_index, batch_count):
+    for i in range(start_index, start_index + batch_count):
+        pixel = data[i]
+        if pixel not in LAB_VALUES:
+            values = rgb_to_lab(pixel)
+            LAB_VALUES[pixel] = values
+        else:
+            values = LAB_VALUES[pixel]
+                
+        min_index = 0
+        min_difference = get_difference(values, COLORS[min_index][1])
 
-            pixels[x, y] = COLORS[min_index][0]
+        for j in range(1, len(COLORS)):
+            difference = get_difference(values, COLORS[j][1])
+            if difference < min_difference:
+                min_index = j
+                min_difference = difference
+
+        data[i] = COLORS[min_index][0]
 
 
 # Operations
@@ -149,22 +152,21 @@ for image_file in image_files:
     print(f"Skribblifying {image_file}...")
     
     image = Image.open(image_file)
-    pixels = image.load()
-    width, height = image.size
+    data = list(image.getdata())
+    pixel_count = len(data)
     
     thread_count = cpu_count() * 2
     threadPoolExecutor = ThreadPoolExecutor(thread_count)
     
-    x_count = int(width / thread_count)
-    last_x_count = x_count + width - thread_count * x_count
-
+    batch_count = int(pixel_count / thread_count)
+    last_batch_count = batch_count + pixel_count - thread_count * batch_count
     
-    for x in range(thread_count - 1):
-        threadPoolExecutor.submit(change_pixel, x * x_count, x_count)
-    threadPoolExecutor.submit(change_pixel, width - last_x_count, last_x_count)
-    
+    for i in range(thread_count - 1):
+        threadPoolExecutor.submit(change_pixel, i * batch_count, batch_count)
+    threadPoolExecutor.submit(change_pixel, pixel_count - last_batch_count, last_batch_count)
     threadPoolExecutor.shutdown()
     
+    image.putdata(data)
     image.save(f"{Path(output_path, f'{prefix}{image_file}')}")
 
 print("Skribblifying Done! :D")

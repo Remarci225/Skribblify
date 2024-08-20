@@ -1,7 +1,7 @@
 # Skribblify
 
 ## About
-Skribblify is a simple script that converts images to the [skribbl.io](https://skribbl.io/) color palette which only uses 26 colors.
+Skribblify is a simple script that converts images to the [skribbl.io](https://skribbl.io/) color palette which only uses 26 different colors.
 
 <img src="examples\pexels-robertkso-16244387.jpg" width=360px/> <img src="examples\converted%20pexels-robertkso-16244387.jpg" width=360px/>
 
@@ -15,6 +15,9 @@ Skribblify is a simple script that converts images to the [skribbl.io](https://s
 
 ## Usage
 The script takes all **.png**, **.jpg** and **.jpeg** files in the same directory and converts them by making copies and prefixing the filenames with *"converted "*.
+You can use the ```-i```, ```-o``` and ```-p``` flags to set input and output directories and filename prefix respectively.
 
 ## Performance
-Even with multithreading, the script can take quite a while to finish, possibly because of all the RGB to CIELAB conversions that happen in the background. It took about 52 seconds for the example image (with a resolution of 1920x1421) running on a 2,9 GHz - 4,2 GHz CPU with 8 cores and 16 threads.
+Even with multithreading, the script can take quite a while to finish, possibly because of the interpreted nature of python, iterating over all pixels and all the RGB to CIELAB conversions. It took about 18 seconds for the example image (with a resolution of 1920x1421) running on a 2,9 GHz - 4,2 GHz CPU with 8 cores and 16 threads.
+
+Improving performance and color matching are probably the two most important aspects for this project.
